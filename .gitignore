@@ -1,2 +1,4 @@
 *.pyc
 .tmp
+extracted_data.json
+__pycache__
