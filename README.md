@@ -12,7 +12,7 @@ NB! The table requires a special formatting.
 
 opencv-python
 numpy
-pdfplumberpytho
+pdfplumber
 
 ## Usage
 usage: pdfToTable.py [-h] [--pages PAGES] pdf_file
