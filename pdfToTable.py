@@ -14,12 +14,20 @@ from MessageDialog import message_dialog
 
 import selectinwindow
 
-def table_to_json(parsed_table):
+TABLE_NO_LINE_SETTINGS = {
+    "vertical_strategy": "text",
+    "horizontal_strategy": "text"
+}
+
+def table_no_line_to_json(page, bbox):
     """
     Convert the parsed table to a JSON format.
     """
+    # Extract the table from the page using pdfplumber
+    parsed_table = page.within_bbox(bbox).extract_table(TABLE_NO_LINE_SETTINGS)
     json_data = []
     if parsed_table is None:
+        print("No table found")
         return
 
     for row in parsed_table:
@@ -29,39 +37,48 @@ def table_to_json(parsed_table):
         json_data.append(json_row)
     return json_data
 
-def table_header_to_json(parsed_table):
+def table_to_json(page, bbox):
     """
-    Convert the parsed table with header to a JSON format.
+    Convert the parsed table to a JSON format.
     """
+    # Extract the table from the page using pdfplumber
+    parsed_table = page.within_bbox(bbox).extract_table()
+    json_data = []
     if parsed_table is None:
-        return {}
-    json_data = {}
-    header = parsed_table[0]
-    for i, cell in enumerate(header):
-        json_data[cell] = []
-    
-    for row in parsed_table[1:]:
+        print("No table found")
+        return
+
+    for row in parsed_table:
+        json_row = {}
         for i, cell in enumerate(row):
-            json_data[header[i]].append(cell)
-    
+            json_row[f"col_{i}"] = cell
+        json_data.append(json_row)
     return json_data
 
-def header_to_json(parsed_str):
+
+def plain_text_to_json(page, bbox):
     """
-    Convert the parsed header to a JSON format.
+    Convert the parsed Plain text to a JSON format.
     """
+    # Extract the text from the page using pdfplumber
+    parsed_str = page.within_bbox(bbox).extract_text()
+    if parsed_str is None:
+        print("No text found")
+        return
     json_data = {}
-    json_data["header"] = parsed_str
+    json_data["Plain text"] = parsed_str
     return json_data
     
 
-OPTIONS = ["Table", "Table w Header", "Header"]
+OPTIONS = ["Table", "Table no lines", "Plain text"]
 
 PARSE_OPTIONS = {
     "Table": table_to_json,
-    "Table w Header": table_header_to_json,
-    "Header": header_to_json
+    "Table no lines": table_to_json,
+    "Plain text": plain_text_to_json
 }
+
+
 
 
 DEFAULT_BOUNDING_BOX = \
@@ -169,7 +186,8 @@ if __name__ == "__main__":
             image = cv2.imread(f_image)
             
             # Load the bounding boxes from the JSON file
-            regions = load_bounding_boxes(page)  
+            regions = load_bounding_boxes(page)
+            load_regions = False
             if len(regions):
                 load_regions = message_dialog("Last regions", "Do you want to use the last regions?", "Yes", "No")
                 if load_regions is True:
@@ -242,10 +260,6 @@ if __name__ == "__main__":
                     data = {"regions": regions}
                     json.dump(data, file, indent=4, ensure_ascii=False)
 
-                
-
-
-            
 
         out_str = {}
         for pagenum in pages:
@@ -256,14 +270,9 @@ if __name__ == "__main__":
             for region in regions:
                 
                 #print(f"Extracted text from bbox {name} {box}:\n{text}")
-                ptype = region.get('type', header_to_json)
-                pstr = ""
-                if ptype.find("Table") != -1:
-                    pstr = page.within_bbox(region['boundaries']).extract_table()
-                else:
-                    pstr = page.within_bbox(region['boundaries']).extract_text()
+                ptype = region.get('type', "Plain text")
 
-                out_str["%s_%s" % (pagenum,cnt)] = PARSE_OPTIONS[ptype](pstr)
+                out_str["%s_%s" % (pagenum,cnt)] = PARSE_OPTIONS[ptype](page, region['boundaries'] )
                 cnt += 1
 
         # Save the extracted data to a JSON file

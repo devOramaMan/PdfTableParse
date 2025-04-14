@@ -316,10 +316,8 @@ def clearCanvasNDraw(dragObj):
     if dragObj.cnt > 0:
         return
     dragObj.cnt += 1
-    print(id(dragObj))
     key = cv2.waitKey()
     dragObj.exit = True
-    print("Done key %s" % key)
     return key
 
 
@@ -387,7 +385,6 @@ def run(obj):
         key = clearCanvasNDraw(obj)
         if obj.returnflag:
             ret = True
-    print(id(obj))
     while obj.exit is False:
         # display the image
         cv2.imshow(wName, obj.image)
