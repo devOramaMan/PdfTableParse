@@ -74,7 +74,7 @@ OPTIONS = ["Table", "Table no lines", "Plain text"]
 
 PARSE_OPTIONS = {
     "Table": table_to_json,
-    "Table no lines": table_to_json,
+    "Table no lines": table_no_line_to_json,
     "Plain text": plain_text_to_json
 }
 
