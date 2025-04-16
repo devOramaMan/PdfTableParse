@@ -1,6 +1,7 @@
 import argparse
 import os
 import pdfplumber
+import re
 
 import cv2
 import json
@@ -18,6 +19,97 @@ TABLE_NO_LINE_SETTINGS = {
     "vertical_strategy": "text",
     "horizontal_strategy": "text"
 }
+#intersection_x_tolerance
+#"join_x_tolerance": 15
+#snap_x_tolerance
+ENUMS = ['A', 'B', 'C']
+
+def camelcase(cols, **kwargs):
+    """
+    input: "STRING IS FINE"
+    output: "StringIsFine"
+    """
+    pass
+
+def index(cols, **kwargs):
+    """
+    input: "1.3.4 234"
+    output: "1.3.4"
+    """
+
+def integer(cols, **kwargs):
+    """
+    input: "1233 43342"
+    output: "1233"
+    """
+    pass
+
+def enums(cols, **kwargs):
+    """
+    input: B dfd
+    output: B
+    (if B is in inputed enum list)
+    """
+    pass
+
+def identifier(cols, **kwargs):
+    """
+    input: G2.1 23
+    output: G2.1
+    """
+
+def plain_text(cols, **kwargs):
+    """
+    input: "hello fdkj"
+    output: "hello fdkj"
+    """
+    pass
+
+TABLE_2 = []
+TABLE_1 = [
+    {
+        "name":"index",
+        "type": index
+    },
+    {
+        "name":"num1",
+        "type":integer
+    },
+    {
+        "name":"num2",
+        "type":integer
+    },
+    {
+        "name":"property",
+        "type":camelcase
+    },
+    {
+        "name": "enum",
+        "type": enums,
+        "valid": ENUMS
+    },
+    {
+        "name": "category",
+        "type": identifier
+    },
+    {
+        "name": "value",
+        "type": integer
+    },
+    {
+        "name": "description",
+        "type": plain_text
+    }
+]
+
+def table_1_to_json(page, bbox):
+    """
+    Convert table
+    """
+
+    data = table_no_line_to_json(page, bbox)
+
+
 
 def table_no_line_to_json(page, bbox):
     """
@@ -36,6 +128,47 @@ def table_no_line_to_json(page, bbox):
             json_row[f"col_{i}"] = cell
         json_data.append(json_row)
     return json_data
+
+CONSECUTIVE_SPACE = 3
+def keep_blank_text(page, bbox):
+    """
+    Convert plain text and keep blank chars 
+    Algorithm:
+    1 split line feed
+    2 remove trailing space
+    3 remove front space
+    4 remove consecutive space above {CONSECUTIVE_SPACE}
+    5 split consecutive space of {CONSECUTIVE_SPACE}
+    """
+    #col_split = "".join([" "] * CONSECUTIVE_SPACE)
+    col_split = " " * CONSECUTIVE_SPACE
+    parsed_str = page.within_bbox(bbox).extract_text( keep_blank_chars = True )
+    lines = parsed_str.split("\n")
+    json_data = []
+    for line in lines:
+        row = {}
+        line = line.rstrip().strip()
+        if len(line) == 0:
+            continue
+
+        pattern = r'\s{' + str(CONSECUTIVE_SPACE) + ',}'
+        line = re.sub(pattern, col_split, line)
+        if len(line) == 0:
+            continue
+
+        if line.find(col_split) == -1:
+            continue
+
+        cols = line.split(col_split)
+        for idx, col in zip(range(len(cols)),cols):
+            row[idx] = col
+
+        if len(row):
+            json_data.append(row)
+
+    return json_data
+
+
 
 def table_to_json(page, bbox):
     """
@@ -75,7 +208,8 @@ OPTIONS = ["Table", "Table no lines", "Plain text"]
 PARSE_OPTIONS = {
     "Table": table_to_json,
     "Table no lines": table_no_line_to_json,
-    "Plain text": plain_text_to_json
+    "Plain text": plain_text_to_json,
+    "Keep blank text": keep_blank_text
 }
 
 
@@ -126,6 +260,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=helpstr)
     parser.add_argument("pdf_file", help="Path to the PDF file to process")
     parser.add_argument("--pages", "-p", help="Pages to process", required=False, type=parse_range, default=None)
+    parser.add_argument("--last", "-l", action='store_true', help="Use last regions (no usr input)", required=False)
     args = parser.parse_args()
 
     BOUNDING_BOXES = []#load_bounding_boxes()
@@ -144,12 +279,20 @@ if __name__ == "__main__":
 
     if pages is None:
         # Get last page number used
-        last_page = "1-3"
+        last_pages = "1-3"
+        last = False
         if os.path.exists(".tmp/last_page"):
             with open(".tmp/last_page", "r") as file:
-                last_page = file.read()
+                last_pages = file.read()
+                last = True
+        if args.last is False or last is False:
+            pages = input_dialog("Select pages", "Enter the pages to process (e.g., 1,2,3 or 1-3):", last_pages)
+        else:
+            pages = last_pages
+            
         
-        pages = input_dialog("Select pages", "Enter the pages to process (e.g., 1,2,3 or 1-3):", last_page)
+
+
         if pages is None:
             print("No pages selected. Exiting.")
             exit(0)
@@ -180,85 +323,86 @@ if __name__ == "__main__":
         update_cnt = 0    
 
         #Select bounderies for each page
-        for f_image, page  in zip(image_files, pages):
-            # Load the image saved from pdfplumber
-            print(f"Processing image {f_image}")
-            image = cv2.imread(f_image)
-            
-            # Load the bounding boxes from the JSON file
-            regions = load_bounding_boxes(page)
-            load_regions = False
-            if len(regions):
-                load_regions = message_dialog("Last regions", "Do you want to use the last regions?", "Yes", "No")
-                if load_regions is True:
-                    print("Loading regions")          
-                    for region in regions:
-                        wName = '%s (double click the rectangle to update the boundaries)' % f_image
-
-                        #get the width and height of the image
-                        imageHeight, imageWidth = image.shape[:2]
-
-                        x1,y1,x2,y2 = region['boundaries']
-                        width = (x2 - x1) if (x2 > x1) else (x1 - x2)
-                        height = (y2 - y1) if (y2 > y1) else (y1 - y2)
-                        rectI = selectinwindow.DragRectangle(image, wName, imageWidth, imageHeight)
-                        rectI.outRect.setRegion(x1, y1, w= width, h= height)
-                        cv2.namedWindow(rectI.wname)
-                        cv2.setMouseCallback(rectI.wname, selectinwindow.dragrect, rectI)
-
-                        # keep looping until rectangle finalized
-                        if selectinwindow.run(rectI) is True:
-                            print("Updated coordinates")
-                            x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
-                            region['boundaries'] = (x1, y1, x2, y2)
-                            update_cnt += 1
-
-
-                        if update_cnt > 0 or region.get("type", None) is None:
-                            # Ask for the type of parsing
-                            print("Select the type of parsing")
-                            selection = dropdown_dialog("Select Type", OPTIONS, "What kind of pdf parsing are you processing?")
-                            if selection:
-                                print(f"Selected: {selection}")
-                                region['type'] = selection
-                            else:
-                                print("Selection canceled")
+        if args.last is False or last is False:
+            for f_image, page  in zip(image_files, pages):
+                # Load the image saved from pdfplumber
+                print(f"Processing image {f_image}")
+                image = cv2.imread(f_image)
                 
-            add_region = message_dialog("Add region", "Do you want to add a new region?", "Yes", "No")
-            if load_regions is False:
-                regions = []
-            while add_region is True:
-                wName = '%s (double click the rectangle to add the boundaries)' % f_image
-                #get the width and height of the image
-                imageHeight, imageWidth = image.shape[:2]
-                rectI = selectinwindow.DragRectangle(image, wName, imageWidth, imageHeight)
-                cv2.namedWindow(rectI.wname)
-                cv2.setMouseCallback(rectI.wname, selectinwindow.dragrect, rectI)
+                # Load the bounding boxes from the JSON file
+                regions = load_bounding_boxes(page)
+                load_regions = False
+                if len(regions):
+                    load_regions = message_dialog("Last regions", "Do you want to use the last regions?", "Yes", "No")
+                    if load_regions is True:
+                        print("Loading regions")          
+                        for region in regions:
+                            wName = '%s (double click the rectangle to update the boundaries)' % f_image
 
-                # keep looping until rectangle finalized
-                region = {}
-                if selectinwindow.run(rectI) is True:
-                    print("Updated coordinates")
-                    x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
-                    region['boundaries'] = (x1, y1, x2, y2)
-                    regions.append(region)
-                    selection = dropdown_dialog("Select Type", OPTIONS, "What kind of pdf parsing are you processing?")
-                    if selection:
-                        print(f"Selected: {selection}")
-                        region['type'] = selection
-                    else:
-                        print("Selection canceled")
-                    # Ask for the type of parsing
-                    update_cnt += 1
+                            #get the width and height of the image
+                            imageHeight, imageWidth = image.shape[:2]
+
+                            x1,y1,x2,y2 = region['boundaries']
+                            width = (x2 - x1) if (x2 > x1) else (x1 - x2)
+                            height = (y2 - y1) if (y2 > y1) else (y1 - y2)
+                            rectI = selectinwindow.DragRectangle(image, wName, imageWidth, imageHeight)
+                            rectI.outRect.setRegion(x1, y1, w= width, h= height)
+                            cv2.namedWindow(rectI.wname)
+                            cv2.setMouseCallback(rectI.wname, selectinwindow.dragrect, rectI)
+
+                            # keep looping until rectangle finalized
+                            if selectinwindow.run(rectI) is True:
+                                print("Updated coordinates")
+                                x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
+                                region['boundaries'] = (x1, y1, x2, y2)
+                                update_cnt += 1
+
+
+                            if update_cnt > 0 or region.get("type", None) is None:
+                                # Ask for the type of parsing
+                                print("Select the type of parsing")
+                                selection = dropdown_dialog("Select Type", list(PARSE_OPTIONS.keys()), "What kind of pdf parsing are you processing?")
+                                if selection:
+                                    print(f"Selected: {selection}")
+                                    region['type'] = selection
+                                else:
+                                    print("Selection canceled")
+                    
                 add_region = message_dialog("Add region", "Do you want to add a new region?", "Yes", "No")
-                
-            
+                if load_regions is False:
+                    regions = []
+                while add_region is True:
+                    wName = '%s (double click the rectangle to add the boundaries)' % f_image
+                    #get the width and height of the image
+                    imageHeight, imageWidth = image.shape[:2]
+                    rectI = selectinwindow.DragRectangle(image, wName, imageWidth, imageHeight)
+                    cv2.namedWindow(rectI.wname)
+                    cv2.setMouseCallback(rectI.wname, selectinwindow.dragrect, rectI)
 
-            if update_cnt > 0:
-                json_file = ".tmp/regions_%d.json" % page
-                with open(json_file, "w", encoding='utf-8') as file:
-                    data = {"regions": regions}
-                    json.dump(data, file, indent=4, ensure_ascii=False)
+                    # keep looping until rectangle finalized
+                    region = {}
+                    if selectinwindow.run(rectI) is True:
+                        print("Updated coordinates")
+                        x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
+                        region['boundaries'] = (x1, y1, x2, y2)
+                        regions.append(region)
+                        selection = dropdown_dialog("Select Type", OPTIONS, "What kind of pdf parsing are you processing?")
+                        if selection:
+                            print(f"Selected: {selection}")
+                            region['type'] = selection
+                        else:
+                            print("Selection canceled")
+                        # Ask for the type of parsing
+                        update_cnt += 1
+                    add_region = message_dialog("Add region", "Do you want to add a new region?", "Yes", "No")
+                    
+                
+
+                if update_cnt > 0:
+                    json_file = ".tmp/regions_%d.json" % page
+                    with open(json_file, "w", encoding='utf-8') as file:
+                        data = {"regions": regions}
+                        json.dump(data, file, indent=4, ensure_ascii=False)
 
 
         out_str = {}
