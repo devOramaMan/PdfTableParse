@@ -9,6 +9,7 @@ from textwrap import wrap
 from DropdownDialog import dropdown_dialog 
 from InputDialog import input_dialog
 from MessageDialog import message_dialog
+import SetRegion
 
 
 
@@ -102,7 +103,6 @@ def load_bounding_boxes(page):
 
 helpstr="""
 Parse the PDF table to row an cols.
-
 Example: python ./pdfToTable.py [table.pdf]
 """
 
@@ -116,6 +116,30 @@ def parse_range(arg):
         else:
             result.append(int(part))
     return result
+
+PDF_PLUMB = None
+def load_image(page, pdf=None):
+    """ 
+    Load the image from the PDF page and save it as a PNG file.
+    """
+    global PDF_PLUMB
+    if pdf is None:
+        pdf = PDF_PLUMB
+    else:
+        PDF_PLUMB = pdf
+
+    if pdf is None:
+        return None
+    
+    name = str(".tmp/page_image_%d.png" % page)
+    if os.path.exists(name) == False:
+        page_pdf = pdf.pages[page]
+        # Visualize the page layout
+        #box = bbox['boundaries']
+        im = page_pdf.to_image()#resolution=300)
+        #im.draw_rect(box)  # Draw the bounding box
+        im.save('%s' % (name))
+    return name
 
 #main
 if __name__ == "__main__":
@@ -136,11 +160,7 @@ if __name__ == "__main__":
 
     image_files = []
 
-
-
-
     pages = args.pages
-
 
     if pages is None:
         # Get last page number used
@@ -159,22 +179,14 @@ if __name__ == "__main__":
 
         pages = parse_range(pages)
 
-
-
     with pdfplumber.open(args.pdf_file) as pdf:
         for page in pages:
-            name = str(".tmp/page_image_%d.png" % page)
-            if os.path.exists(name) == False:
-                page_pdf = pdf.pages[page]
-                # Visualize the page layout
-                #box = bbox['boundaries']
-                im = page_pdf.to_image()
-                #im.draw_rect(box)  # Draw the bounding box
-                im.save('%s' % (name))
+            name = load_image(page, pdf)
+            
 
-                # Extract text from the bounding box
-                #text = page.within_bbox(box).extract_text()
-                #print(f"Extracted text from bbox {name} {box}:\n{text}")
+            # Extract text from the bounding box
+            #text = page.within_bbox(box).extract_text()
+            #print(f"Extracted text from bbox {name} {box}:\n{text}")
             image_files.append(name)
 
         update_cnt = 0    
@@ -188,69 +200,70 @@ if __name__ == "__main__":
             # Load the bounding boxes from the JSON file
             regions = load_bounding_boxes(page)
             load_regions = False
-            if len(regions):
-                load_regions = message_dialog("Last regions", "Do you want to use the last regions?", "Yes", "No")
-                if load_regions is True:
-                    print("Loading regions")          
-                    for region in regions:
-                        wName = '%s (double click the rectangle to update the boundaries)' % f_image
+            #if len(regions):
+                #load_regions = message_dialog("Last regions", "Do you want to use the last regions?", "Yes", "No")
+                # if load_regions is True:
+                #     print("Loading regions")          
+                #     for region in regions:
+                #         wName = '%s (double click the rectangle to update the boundaries)' % f_image
 
-                        #get the width and height of the image
-                        imageHeight, imageWidth = image.shape[:2]
+                #         #get the width and height of the image
+                #         imageHeight, imageWidth = image.shape[:2]
 
-                        x1,y1,x2,y2 = region['boundaries']
-                        width = (x2 - x1) if (x2 > x1) else (x1 - x2)
-                        height = (y2 - y1) if (y2 > y1) else (y1 - y2)
-                        rectI = selectinwindow.DragRectangle(image, wName, imageWidth, imageHeight)
-                        rectI.outRect.setRegion(x1, y1, w= width, h= height)
-                        cv2.namedWindow(rectI.wname)
-                        cv2.setMouseCallback(rectI.wname, selectinwindow.dragrect, rectI)
+                #         x1,y1,x2,y2 = region['boundaries']
+                #         width = (x2 - x1) if (x2 > x1) else (x1 - x2)
+                #         height = (y2 - y1) if (y2 > y1) else (y1 - y2)
+                #         rectI = SetRegion.DragRectangle(image, wName, imageWidth, imageHeight)
+                #         rectI.outRect.setRegion(x1, y1, w= width, h= height)
+                #         cv2.namedWindow(rectI.wname)
+                #         cv2.setMouseCallback(rectI.wname, SetRegion.dragrect, rectI)
 
-                        # keep looping until rectangle finalized
-                        if selectinwindow.run(rectI) is True:
-                            print("Updated coordinates")
-                            x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
-                            region['boundaries'] = (x1, y1, x2, y2)
-                            update_cnt += 1
+                #         # keep looping until rectangle finalized
+                #         if SetRegion.run(rectI) is True:
+                #             print("Updated coordinates")
+                #             x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
+                #             region['boundaries'] = (x1, y1, x2, y2)
+                #             update_cnt += 1
 
 
-                        if update_cnt > 0 or region.get("type", None) is None:
-                            # Ask for the type of parsing
-                            print("Select the type of parsing")
-                            selection = dropdown_dialog("Select Type", OPTIONS, "What kind of pdf parsing are you processing?")
-                            if selection:
-                                print(f"Selected: {selection}")
-                                region['type'] = selection
-                            else:
-                                print("Selection canceled")
+                #         if update_cnt > 0 or region.get("type", None) is None:
+                #             # Ask for the type of parsing
+                #             print("Select the type of parsing")
+                #             selection = dropdown_dialog("Select Type", OPTIONS, "What kind of pdf parsing are you processing?")
+                #             if selection:
+                #                 print(f"Selected: {selection}")
+                #                 region['type'] = selection
+                #             else:
+                #                 print("Selection canceled")
                 
-            add_region = message_dialog("Add region", "Do you want to add a new region?", "Yes", "No")
-            if load_regions is False:
-                regions = []
-            while add_region is True:
-                wName = '%s (double click the rectangle to add the boundaries)' % f_image
-                #get the width and height of the image
-                imageHeight, imageWidth = image.shape[:2]
-                rectI = selectinwindow.DragRectangle(image, wName, imageWidth, imageHeight)
-                cv2.namedWindow(rectI.wname)
-                cv2.setMouseCallback(rectI.wname, selectinwindow.dragrect, rectI)
+            #add_region = message_dialog("Add region", "Do you want to add a new region?", "Yes", "No")
+            #if load_regions is False:
+            regions = []
+        #while add_region is True:
+            wName = 'Draw a region and add the boundaries of table'
+            #get the width and height of the image
+            imageHeight, imageWidth = image.shape[:2]
+            rectI = SetRegion.DragRectangle(image, wName, imageWidth, imageHeight,pageNum=page, options=OPTIONS)
+            cv2.namedWindow(rectI.wname)
+            cv2.setMouseCallback(rectI.wname, SetRegion.dragrect, rectI)
+            rectI.setRenderPtr(load_image)
 
-                # keep looping until rectangle finalized
-                region = {}
-                if selectinwindow.run(rectI) is True:
-                    print("Updated coordinates")
-                    x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
-                    region['boundaries'] = (x1, y1, x2, y2)
-                    regions.append(region)
-                    selection = dropdown_dialog("Select Type", OPTIONS, "What kind of pdf parsing are you processing?")
-                    if selection:
-                        print(f"Selected: {selection}")
-                        region['type'] = selection
-                    else:
-                        print("Selection canceled")
-                    # Ask for the type of parsing
-                    update_cnt += 1
-                add_region = message_dialog("Add region", "Do you want to add a new region?", "Yes", "No")
+            # keep looping until rectangle finalized
+            region = {}
+            if SetRegion.run(rectI) is True:
+                print("Updated coordinates")
+                x1, y1, x2, y2 = rectI.outRect.x, rectI.outRect.y, rectI.outRect.x + rectI.outRect.w, rectI.outRect.y + rectI.outRect.h
+                region['boundaries'] = (x1, y1, x2, y2)
+                regions.append(region)
+                selection = dropdown_dialog("Select Type", OPTIONS, "What kind of pdf parsing are you processing?")
+                if selection:
+                    print(f"Selected: {selection}")
+                    region['type'] = selection
+                else:
+                    print("Selection canceled")
+                # Ask for the type of parsing
+                update_cnt += 1
+            add_region = message_dialog("Add region", "Do you want to add a new region?", "Yes", "No")
                 
             
 

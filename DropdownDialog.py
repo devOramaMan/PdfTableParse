@@ -142,8 +142,10 @@ def dropdown_dialog(title, options, message="Select an option:", default_index=0
         if cv2.getWindowProperty(title, cv2.WND_PROP_VISIBLE) < 1:
             print("Window closed by user.")
             canceled = True
-    
-    cv2.destroyWindow(title)
+    try:
+        cv2.destroyWindow(title)
+    except:
+        pass
     
     if confirm_clicked:
         return options[selected_index]
