@@ -20,97 +20,6 @@ TABLE_NO_LINE_SETTINGS = {
     "vertical_strategy": "text",
     "horizontal_strategy": "text"
 }
-#intersection_x_tolerance
-#"join_x_tolerance": 15
-#snap_x_tolerance
-ENUMS = ['A', 'B', 'C']
-
-def camelcase(cols, **kwargs):
-    """
-    input: "STRING IS FINE"
-    output: "StringIsFine"
-    """
-    pass
-
-def index(cols, **kwargs):
-    """
-    input: "1.3.4 234"
-    output: "1.3.4"
-    """
-
-def integer(cols, **kwargs):
-    """
-    input: "1233 43342"
-    output: "1233"
-    """
-    pass
-
-def enums(cols, **kwargs):
-    """
-    input: B dfd
-    output: B
-    (if B is in inputed enum list)
-    """
-    pass
-
-def identifier(cols, **kwargs):
-    """
-    input: G2.1 23
-    output: G2.1
-    """
-
-def plain_text(cols, **kwargs):
-    """
-    input: "hello fdkj"
-    output: "hello fdkj"
-    """
-    pass
-
-TABLE_2 = []
-TABLE_1 = [
-    {
-        "name":"index",
-        "type": index
-    },
-    {
-        "name":"num1",
-        "type":integer
-    },
-    {
-        "name":"num2",
-        "type":integer
-    },
-    {
-        "name":"property",
-        "type":camelcase
-    },
-    {
-        "name": "enum",
-        "type": enums,
-        "valid": ENUMS
-    },
-    {
-        "name": "category",
-        "type": identifier
-    },
-    {
-        "name": "value",
-        "type": integer
-    },
-    {
-        "name": "description",
-        "type": plain_text
-    }
-]
-
-def table_1_to_json(page, bbox):
-    """
-    Convert table
-    """
-
-    data = table_no_line_to_json(page, bbox)
-
-
 
 def table_no_line_to_json(page, bbox):
     """
@@ -410,11 +319,11 @@ if __name__ == "__main__":
                 
             
 
-                if update_cnt > 0:
-                    json_file = ".tmp/regions_%d.json" % page
-                    with open(json_file, "w", encoding='utf-8') as file:
-                        data = {"regions": regions}
-                        json.dump(data, file, indent=4, ensure_ascii=False)
+            if update_cnt > 0:
+                json_file = ".tmp/regions_%d.json" % page
+                with open(json_file, "w", encoding='utf-8') as file:
+                    data = {"regions": regions}
+                    json.dump(data, file, indent=4, ensure_ascii=False)
 
 
         out_str = {}
