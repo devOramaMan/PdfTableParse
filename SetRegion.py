@@ -1,4 +1,3 @@
-
 import cv2
 from DropdownDialog import dropdown_dialog
 
@@ -10,10 +9,19 @@ class Button:
         self.h = h
         self.label = label
         self.show = True
+        self.pressed = False  # Add pressed state
 
     def draw(self, image):
         if not self.show:
             return
+        
+        if self.pressed:
+        # Create a filled rectangle with gray color
+            cv2.rectangle(image, (self.x, self.y), (self.x + self.w, self.y + self.h), (200, 200, 200), -1)
+        else:
+            # Create a filled rectangle with white color
+            cv2.rectangle(image, (self.x, self.y), (self.x + self.w, self.y + self.h), (255, 255, 255), -1)
+
         #cv2.rectangle(image, (self.x, self.y), (self.x + self.w, self.y + self.h), (0, 255, 0), -1)
         cv2.rectangle(image, (self.x, self.y), (self.x + self.w, self.y + self.h), (0, 0, 0), 2)
         #cv2.putText(image, self.label, (self.x + 10, self.y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
@@ -176,8 +184,11 @@ class DragRectangle:
         self.prevPage = Button(120, 2, 50, 20, "Prev")
         self.pageInput = TextInput(180, 2, 50, 20, "", str(pageNum))
         self.nextPage = Button(240, 2, 50, 20, "Next")
+        self.doneButton = Button(300, 2, 50, 20, "Done")  # Added Done button
+        self.buttons = {1: self.addRegion, 2: self.prevPage, 3: self.pageInput, 4: self.nextPage, 5: self.doneButton}
         self.getPageFunc = None
-        self.regions = []
+        self.regions = {}
+        self.selectedEvent = None
 
     def setRenderPtr(self, renderPtr):
         self.getPageFunc = renderPtr
@@ -190,6 +201,7 @@ class DragRectangle:
         self.nextPage.draw(img)
         self.prevPage.draw(img)
         self.pageInput.draw(img, self.pageNum)
+        self.doneButton.draw(img)  # Draw Done button
 
     def pointInWidgetRect(self, x, y):
         if self.addRegion.is_clicked(x, y):
@@ -200,22 +212,89 @@ class DragRectangle:
             return 3
         elif self.nextPage.is_clicked(x, y):
             return 4
+        elif self.doneButton.is_clicked(x, y):  # Handle Done button
+            return 5
         return 0
+
+    def handleWidgetDown(self, event):
+        if event not in self.buttons:
+            return
+        # Set the pressed state of the button to True
+        self.buttons[event].pressed = True
+        self.buttons[event].draw(self.image)
+        tmp = self.image.copy()
+        cv2.rectangle(tmp, (self.outRect.x, self.outRect.y),
+                  (self.outRect.x + self.outRect.w,
+                   self.outRect.y + self.outRect.h), (0, 255, 0), 2)
+        cv2.imshow(self.wname, tmp)
+
+        self.selectedEvent = event
+
+    def handleWidgetUp(self, event):
+        if self.selectedEvent not in self.buttons:
+            return
+        
+        # Reset the pressed state of the button
+        self.buttons[self.selectedEvent].pressed = False
+        self.buttons[self.selectedEvent].draw(self.image)
+
+        tmp = self.image.copy()
+        cv2.rectangle(tmp, (self.outRect.x, self.outRect.y),
+                  (self.outRect.x + self.outRect.w,
+                   self.outRect.y + self.outRect.h), (0, 255, 0), 2)
+        cv2.imshow(self.wname, tmp)
+
+        if event == self.selectedEvent:
+            self.selectedEvent = None
+            return self.handleWidgetEvent(event)
 
 
     def handleWidgetEvent(self, event):
         if event == 1:
             x1, y1, x2, y2 = self.outRect.x, self.outRect.y, self.outRect.x + self.outRect.w, self.outRect.y + self.outRect.h
-            self.returnflag = True
+            
+            if (x1, y1, x2, y2) == (0, 0, 0, 0):
+                print("No region selected")
+                return None
+            
             region = {}
             region['boundaries'] = (x1, y1, x2, y2)
             selection = dropdown_dialog("Select Type", self.options, "What kind of pdf parsing are you processing?")
             if selection:
                 print(f"Selected: {selection}")
                 region['type'] = selection
-                self.regions.append(region)
+                if self.pageNum in self.regions:
+                    # Append to existing regions if the boundaries then remove the old one
+                    for i, r in enumerate(self.regions[self.pageNum]):
+                        if r['boundaries'] == region['boundaries']:
+                            self.regions[self.pageNum].pop(i)
+                            break
+                    self.regions[self.pageNum].append(region)
+                else:
+                    self.regions[self.pageNum] = [ region ]
+                #Add a text to the upper left corner of the rectangle with the type of region bold and blue 
+                #First draw a white rectangle background for only for the text
+                (text_width, text_height), baseline = cv2.getTextSize(selection, cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)
+
+                # Add padding (optional)
+                padding_x = 10
+                padding_y = 5
+                txt_w = text_width + padding_x * 2
+                txt_h = text_height + padding_y * 2 + baseline
+                cv2.rectangle(self.image, (self.outRect.x, self.outRect.y),
+                        (self.outRect.x + txt_w,
+                        self.outRect.y + txt_h), (255, 255, 255), -1)
+                cv2.putText(self.image, selection, (self.outRect.x + 5, self.outRect.y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 0, 0), 1)
+                cv2.rectangle(self.image, (self.outRect.x, self.outRect.y),
+                        (self.outRect.x + self.outRect.w,
+                        self.outRect.y + self.outRect.h), (255, 0, 0), 2)
                 cv2.imshow(self.wname, self.image)
+                self.outRect.x, self.outRect.y, self.outRect.w, self.outRect.h = (0, 0, 0, 0)
+                self.active = False
             else:
+                cv2.imshow(self.wname, self.image)
+                self.outRect.x, self.outRect.y, self.outRect.w, self.outRect.h = (0, 0, 0, 0)
+                self.active = False
                 print("Selection canceled")
             return "addRegion"
         elif event == 2:
@@ -234,11 +313,12 @@ class DragRectangle:
             self.keepWithin.h = imageHeight
             cv2.imshow(self.wname, self.image)
             self.drawButtons()
-            
+            self.active = False
 
             return "prevPage"
         elif event == 3:
             self.pageInput.active = True
+            self.active = False
             return "pageInput"
         elif event == 4:
             if self.getPageFunc is None:
@@ -256,9 +336,15 @@ class DragRectangle:
             #self.wname = f"Page {self.pageNum}"
             cv2.imshow(self.wname, self.image)
             self.drawButtons()
-
+            self.active = False
             return "nextPage"
         
+        elif event == 5:
+            self.exit = True
+            cv2.destroyWindow(self.wname)
+            print("Done button pressed. Exiting.")
+            self.returnflag = True
+            return "done"
         else:
             return None
 
@@ -274,12 +360,16 @@ def dragrect(event, x, y, flags, dragObj):
         y = dragObj.keepWithin.y + dragObj.keepWithin.h - 1
 
     if event == cv2.EVENT_LBUTTONDOWN:
+        #print("Mouse down")
         mouseDown(x, y, dragObj)
     if event == cv2.EVENT_LBUTTONUP:
-        mouseUp(dragObj)
+        #print("Mouse up")
+        mouseUp(x, y, dragObj)
     if event == cv2.EVENT_MOUSEMOVE:
+        #print("Mouse move %d %d" % (x, y))
         mouseMove(x, y, dragObj)
     if event == cv2.EVENT_LBUTTONDBLCLK:
+        #print("Mouse double click")
         mouseDoubleClick(x, y, dragObj)
 
 
@@ -297,13 +387,16 @@ def mouseDoubleClick(eX, eY, dragObj):
         return
     if dragObj.active:
         if pointInRect(eX, eY, dragObj.outRect.x, dragObj.outRect.y, dragObj.outRect.w, dragObj.outRect.h):
-            dragObj.returnflag = True
-            cv2.destroyWindow(dragObj.wname)
+            #dragObj.returnflag = True
+            #cv2.destroyWindow(dragObj.wname)
+            dragObj.handleWidgetEvent(1)
         
 
 
 def mouseDown(eX, eY, dragObj):
-    if dragObj.pointInWidgetRect(eX, eY):
+    event = dragObj.pointInWidgetRect(eX, eY)
+    if event > 0:
+        dragObj.handleWidgetDown(dragObj.pointInWidgetRect(eX, eY))
         return
     if dragObj.active:
         if pointInRect(eX, eY, dragObj.outRect.x - dragObj.sBlk,
@@ -367,8 +460,7 @@ def mouseDown(eX, eY, dragObj):
 
 
 def mouseMove(eX, eY, dragObj):
-    if dragObj.pointInWidgetRect(eX, eY):
-        return
+    
     if dragObj.drag & dragObj.active:
         dragObj.outRect.w = eX - dragObj.outRect.x
         dragObj.outRect.h = eY - dragObj.outRect.y
@@ -436,7 +528,11 @@ def mouseMove(eX, eY, dragObj):
         return
 
 
-def mouseUp(dragObj):
+def mouseUp(x, y, dragObj):
+    event = dragObj.pointInWidgetRect(x, y)
+    if event > 0:
+        dragObj.handleWidgetUp(event)
+        return
     dragObj.drag = False
     disableResizeButtons(dragObj)
     straightenUpRect(dragObj)
