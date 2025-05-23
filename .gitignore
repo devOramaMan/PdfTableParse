@@ -3,3 +3,6 @@
 extracted_data.json
 __pycache__
 .vscode*
+dist/*
+build/*
+*.spec

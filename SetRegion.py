@@ -189,6 +189,7 @@ class DragRectangle:
         self.getPageFunc = None
         self.regions = {}
         self.selectedEvent = None
+        self.imgHistory = {self.pageNum: self.image}
 
     def setRenderPtr(self, renderPtr):
         self.getPageFunc = renderPtr
@@ -196,7 +197,8 @@ class DragRectangle:
 
     def drawButtons(self, img=None):
         if img is None:
-            img = self.image
+            img = self.imgHistory.get(self.pageNum, self.image)
+        # Draw the buttons
         self.addRegion.draw(img)
         self.nextPage.draw(img)
         self.prevPage.draw(img)
@@ -220,9 +222,10 @@ class DragRectangle:
         if event not in self.buttons:
             return
         # Set the pressed state of the button to True
+        img = self.imgHistory.get(self.pageNum, self.image)
         self.buttons[event].pressed = True
-        self.buttons[event].draw(self.image)
-        tmp = self.image.copy()
+        self.buttons[event].draw(img)
+        tmp = img.copy()
         cv2.rectangle(tmp, (self.outRect.x, self.outRect.y),
                   (self.outRect.x + self.outRect.w,
                    self.outRect.y + self.outRect.h), (0, 255, 0), 2)
@@ -233,12 +236,12 @@ class DragRectangle:
     def handleWidgetUp(self, event):
         if self.selectedEvent not in self.buttons:
             return
-        
+        img = self.imgHistory.get(self.pageNum, self.image)
         # Reset the pressed state of the button
         self.buttons[self.selectedEvent].pressed = False
-        self.buttons[self.selectedEvent].draw(self.image)
+        self.buttons[self.selectedEvent].draw(img)
 
-        tmp = self.image.copy()
+        tmp = img.copy()
         cv2.rectangle(tmp, (self.outRect.x, self.outRect.y),
                   (self.outRect.x + self.outRect.w,
                    self.outRect.y + self.outRect.h), (0, 255, 0), 2)
@@ -281,18 +284,19 @@ class DragRectangle:
                 padding_y = 5
                 txt_w = text_width + padding_x * 2
                 txt_h = text_height + padding_y * 2 + baseline
-                cv2.rectangle(self.image, (self.outRect.x, self.outRect.y),
+                img = self.imgHistory.get(self.pageNum, self.image)
+                cv2.rectangle(img, (self.outRect.x, self.outRect.y),
                         (self.outRect.x + txt_w,
                         self.outRect.y + txt_h), (255, 255, 255), -1)
-                cv2.putText(self.image, selection, (self.outRect.x + 5, self.outRect.y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 0, 0), 1)
-                cv2.rectangle(self.image, (self.outRect.x, self.outRect.y),
+                cv2.putText(img, selection, (self.outRect.x + 5, self.outRect.y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 0, 0), 1)
+                cv2.rectangle(img, (self.outRect.x, self.outRect.y),
                         (self.outRect.x + self.outRect.w,
                         self.outRect.y + self.outRect.h), (255, 0, 0), 2)
-                cv2.imshow(self.wname, self.image)
+                cv2.imshow(self.wname, img)
                 self.outRect.x, self.outRect.y, self.outRect.w, self.outRect.h = (0, 0, 0, 0)
                 self.active = False
             else:
-                cv2.imshow(self.wname, self.image)
+                cv2.imshow(self.wname, self.imgHistory.get(self.pageNum, self.image))
                 self.outRect.x, self.outRect.y, self.outRect.w, self.outRect.h = (0, 0, 0, 0)
                 self.active = False
                 print("Selection canceled")
@@ -306,13 +310,18 @@ class DragRectangle:
                 return None
             self.pageNum -= 1
             print(f"Processing image {f_image}")
-            self.image = cv2.imread(f_image)
+            if self.pageNum in self.imgHistory:
+                self.image = self.imgHistory[self.pageNum]
+            else:
+                self.image = cv2.imread(f_image)
             imageHeight, imageWidth = self.image.shape[:2]
             #self.wname = f"Page {self.pageNum}"
             self.keepWithin.w = imageWidth
             self.keepWithin.h = imageHeight
+            self.drawButtons(self.image)
             cv2.imshow(self.wname, self.image)
-            self.drawButtons()
+            if self.pageNum not in self.imgHistory:
+                self.imgHistory[self.pageNum] = self.image
             self.active = False
 
             return "prevPage"
@@ -329,13 +338,18 @@ class DragRectangle:
                 return None
             self.pageNum += 1
             print(f"Processing image {f_image}")
-            self.image = cv2.imread(f_image)
+            if self.pageNum in self.imgHistory:
+                self.image = self.imgHistory[self.pageNum]
+            else:
+                self.image = cv2.imread(f_image)
             imageHeight, imageWidth = self.image.shape[:2]
             self.keepWithin.w = imageWidth
             self.keepWithin.h = imageHeight
             #self.wname = f"Page {self.pageNum}"
-            cv2.imshow(self.wname, self.image)
             self.drawButtons()
+            cv2.imshow(self.wname, self.image)
+            if self.pageNum not in self.imgHistory:
+                self.imgHistory[self.pageNum] = self.image
             self.active = False
             return "nextPage"
         

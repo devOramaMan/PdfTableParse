@@ -29,7 +29,7 @@ def table_no_line_to_json(page, bbox):
     parsed_table = page.within_bbox(bbox).extract_table(TABLE_NO_LINE_SETTINGS)
     json_data = []
     if parsed_table is None:
-        print("table no line - No table found in region: %s " % str(bbox))
+        print("table no line - No table found in region: %s (p: %d)" % (str(bbox), page))
         return
 
     for row in parsed_table:
@@ -88,7 +88,7 @@ def table_to_json(page, bbox):
     parsed_table = page.within_bbox(bbox).extract_table()
     json_data = []
     if parsed_table is None:
-        print("No table found")
+        print("Table - No table found in region: %s (p, %d) " % (str(bbox), page.page_number))
         return
 
     for row in parsed_table:
@@ -166,9 +166,9 @@ def parse_range(arg):
     for part in arg.split(','):
         if '-' in part:
             start, end = map(int, part.split('-'))
-            result.extend(range(start, end + 1))
+            result.extend(range(start-1, end ))
         else:
-            result.append(int(part))
+            result.append(int(part)-1)
     return result
 
 PDF_PLUMB = None
@@ -176,6 +176,9 @@ def load_image(page, pdf=None):
     """ 
     Load the image from the PDF page and save it as a PNG file.
     """
+    if page < 0:
+        print("Page number must be greater than 0")
+        return None
     global PDF_PLUMB
     if pdf is None:
         pdf = PDF_PLUMB
@@ -241,7 +244,7 @@ if __name__ == "__main__":
 
     with pdfplumber.open(args.pdf_file) as pdf:
         for page in pages:
-            name = load_image(page-1, pdf)
+            name = load_image(page, pdf)
             # Extract text from the bounding box
             image_files.append(name)
 
@@ -251,20 +254,17 @@ if __name__ == "__main__":
             #Select bounderies for each page
             for f_image, page  in zip(image_files, pages):
                 # Load the image saved from pdfplumber
-                page = page - 1 if page > 0 else 0
+                pagenum = page
                 print(f"Processing image {f_image}")
                 image = cv2.imread(f_image)
                 
-                # Load the bounding boxes from the JSON file
-                regions = load_bounding_boxes(page)
                 load_regions = False
-                regions = []
 
                 #while add_region is True:
                 wName = 'Draw a region and add the boundaries of table'
                 #get the width and height of the image
                 imageHeight, imageWidth = image.shape[:2]
-                rectI = SetRegion.DragRectangle(image, wName, imageWidth, imageHeight,pageNum=page, options=OPTIONS)
+                rectI = SetRegion.DragRectangle(image, wName, imageWidth, imageHeight,pageNum=pagenum, options=OPTIONS)
                 cv2.namedWindow(rectI.wname)
                 cv2.setMouseCallback(rectI.wname, SetRegion.dragrect, rectI)
                 rectI.setRenderPtr(load_image)
@@ -290,6 +290,7 @@ if __name__ == "__main__":
 
 
         out_str = {}
+        update_pages.sort()
         for pagenum in update_pages:
             
             regions = load_bounding_boxes(pagenum)
