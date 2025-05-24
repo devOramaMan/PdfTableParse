@@ -128,8 +128,8 @@ DEFAULT_BOUNDING_BOX = \
     "regions": [ ]
 }
 
-def load_bounding_boxes(page):
-    json_file = ".tmp/regions_%d.json" % page
+def load_bounding_boxes(pdfFileName, page ):
+    json_file = ".tmp/regions_%s_%d.json" % (pdfFileName, page)
     data = DEFAULT_BOUNDING_BOX
     if os.path.exists(json_file) is False:
         return data["regions"]
@@ -172,7 +172,8 @@ def parse_range(arg):
     return result
 
 PDF_PLUMB = None
-def load_image(page, pdf=None):
+PDF_FILENAME = None
+def load_image(page,filename=None, pdf=None):
     """ 
     Load the image from the PDF page and save it as a PNG file.
     """
@@ -180,15 +181,22 @@ def load_image(page, pdf=None):
         print("Page number must be greater than 0")
         return None
     global PDF_PLUMB
+    global PDF_FILENAME
     if pdf is None:
         pdf = PDF_PLUMB
     else:
         PDF_PLUMB = pdf
 
-    if pdf is None:
+    if filename is None:
+        filename = PDF_FILENAME
+    else:
+        PDF_FILENAME = filename
+
+    if pdf is None or filename is None:
+        print("PDF file or filename is not set")
         return None
     
-    name = str(".tmp/page_image_%d.png" % page)
+    name = str( ".tmp/%s_%d.png" % (filename, page) )
     if os.path.exists(name) == False:
         page_pdf = pdf.pages[page]
         # Visualize the page layout
@@ -210,7 +218,10 @@ if __name__ == "__main__":
     parser.add_argument("--last", "-l", action='store_true', help="Use last regions (no usr input)", required=False)
     args = parser.parse_args()
 
-    BOUNDING_BOXES = []#load_bounding_boxes()
+    #get the filename without extension
+    pdfFileName = os.path.splitext(os.path.basename(args.pdf_file))[0]
+
+    BOUNDING_BOXES = []
 
     #if tmp folder doesn't exist then make it
     if os.path.exists(".tmp") == False:
@@ -244,7 +255,7 @@ if __name__ == "__main__":
 
     with pdfplumber.open(args.pdf_file) as pdf:
         for page in pages:
-            name = load_image(page, pdf)
+            name = load_image(page, pdfFileName, pdf )
             # Extract text from the bounding box
             image_files.append(name)
 
@@ -279,7 +290,7 @@ if __name__ == "__main__":
                     continue
 
                 for lpage in regions:
-                    json_file = ".tmp/regions_%d.json" % lpage
+                    json_file = ".tmp/regions_%s_%d.json" % (pdfFileName, lpage)
                     with open(json_file, "w", encoding='utf-8') as file:
                         update_pages.append(lpage)
                         data = {"regions": regions[lpage]}
@@ -293,7 +304,7 @@ if __name__ == "__main__":
         update_pages.sort()
         for pagenum in update_pages:
             
-            regions = load_bounding_boxes(pagenum)
+            regions = load_bounding_boxes(pdfFileName, pagenum)
             page = pdf.pages[pagenum]
             cnt = 0
             for region in regions:
