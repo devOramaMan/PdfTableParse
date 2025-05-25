@@ -16,6 +16,8 @@ import SetRegion
 
 import selectinwindow
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
 TABLE_NO_LINE_SETTINGS = {
     "vertical_strategy": "text",
     "horizontal_strategy": "text"
@@ -129,7 +131,7 @@ DEFAULT_BOUNDING_BOX = \
 }
 
 def load_bounding_boxes(pdfFileName, page ):
-    json_file = ".tmp/regions_%s_%d.json" % (pdfFileName, page)
+    json_file = "%s/.tmp/regions_%s_%d.json" % (script_dir, pdfFileName, page)
     data = DEFAULT_BOUNDING_BOX
     if os.path.exists(json_file) is False:
         return data["regions"]
@@ -196,7 +198,7 @@ def load_image(page,filename=None, pdf=None):
         print("PDF file or filename is not set")
         return None
     
-    name = str( ".tmp/%s_%d.png" % (filename, page) )
+    name = str( "%s/.tmp/%s_%d.png" % (script_dir, filename, page) )
     if os.path.exists(name) == False:
         page_pdf = pdf.pages[page]
         # Visualize the page layout
@@ -221,11 +223,16 @@ if __name__ == "__main__":
     #get the filename without extension
     pdfFileName = os.path.splitext(os.path.basename(args.pdf_file))[0]
 
+    # get the folder of the current script
+    
+
     BOUNDING_BOXES = []
 
     #if tmp folder doesn't exist then make it
-    if os.path.exists(".tmp") == False:
-        os.mkdir(".tmp")
+    if os.path.exists("%s/.tmp" % script_dir) == False:
+        os.mkdir("%s/.tmp" % script_dir)
+
+    print("script_dir: %s" % script_dir)
 
     image_files = []
 
@@ -235,10 +242,11 @@ if __name__ == "__main__":
         # Get last page number used
         last_pages = "1-3"
         last = False
-        if os.path.exists(".tmp/last_page"):
-            with open(".tmp/last_page", "r") as file:
+        if os.path.exists("%s/.tmp/last_page" % script_dir):
+            with open("%s/.tmp/last_page" % script_dir, "r") as file:
                 last_pages = file.read()
                 last = True
+                print("Last pages used: %s" % last_pages)
         if args.last is False or last is False:
             pages = input_dialog("Select pages", "Enter the pages to process (e.g., 1,2,3 or 1-3):", last_pages)
         else:
@@ -248,7 +256,7 @@ if __name__ == "__main__":
             print("No pages selected. Exiting.")
             exit(0)
 
-        with open(".tmp/last_page", "w") as file:
+        with open("%s/.tmp/last_page" % script_dir, "w") as file:
             file.write(pages)
 
         pages = parse_range(pages)
@@ -290,14 +298,14 @@ if __name__ == "__main__":
                     continue
 
                 for lpage in regions:
-                    json_file = ".tmp/regions_%s_%d.json" % (pdfFileName, lpage)
+                    json_file = "%s/.tmp/regions_%s_%d.json" % (script_dir, pdfFileName, lpage)
                     with open(json_file, "w", encoding='utf-8') as file:
                         update_pages.append(lpage)
                         data = {"regions": regions[lpage]}
                         json.dump(data, file, indent=4, ensure_ascii=False)
         else:
-            update_pages = [ i-1 if i > 0 else 0 for i in pages ]
-            print("Using last regions for pages %s" % (" ".join(map(str, update_pages))) )
+            update_pages = [ i if i > 0 else 0 for i in pages ]
+            print("Using last regions for  %s" % (" ".join(map(str, update_pages))) )
 
 
         out_str = {}
